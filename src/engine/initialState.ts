@@ -1,33 +1,38 @@
-import { GameState, PlayerId, Card, PlayerState } from "../domain/types";
+import { GameState, PlayerId, PlayerState } from "../domain/types";
 import { CARD_DEFINITIONS } from "./cardRegistry";
 
-const INITIAL_HAND_SIZE = 7;
-const INITIAL_HP = 30;
-const INITIAL_MP = 30;
-const INITIAL_PAY = 10;
+export const INITIAL_HAND_SIZE = 7;
+export const INITIAL_HP = 40;
+export const INITIAL_MP = 10;
+export const INITIAL_PAY = 20;
 
-export function shuffleDeck<T>(cards: readonly T[]): T[] {
-  const arr = [...cards];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
+/** The shared pool size players draw from each turn. */
+export const POOL_SIZE = 500;
+
+/**
+ * Draw one card at random from the 500-card master pool.
+ * The pool is the CARD_DEFINITIONS repeated until it reaches POOL_SIZE entries.
+ * Each draw is independent – there is no deck to exhaust.
+ */
+export function drawRandomCard() {
+  const pool = buildPool();
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function buildPlayerDeck(): Card[] {
-  // 4 copies of every card definition, shuffled
-  const deck: Card[] = [];
-  for (let i = 0; i < 4; i++) {
-    deck.push(...CARD_DEFINITIONS);
+function buildPool() {
+  const pool = [];
+  let i = 0;
+  while (pool.length < POOL_SIZE) {
+    pool.push(CARD_DEFINITIONS[i % CARD_DEFINITIONS.length]);
+    i++;
   }
-  return shuffleDeck(deck);
+  return pool;
 }
 
 /**
  * Creates the initial game state.
- * Player order is taken as-is from the supplied array.
- * Shuffle before passing if random order is desired.
+ * Players start with a hand drawn randomly from the pool.
+ * There is no per-player deck – every draw goes through drawRandomCard().
  */
 export function createInitialState(playerIds: PlayerId[]): GameState {
   if (playerIds.length < 2 || playerIds.length > 9) {
@@ -36,14 +41,12 @@ export function createInitialState(playerIds: PlayerId[]): GameState {
 
   const players: { [key in PlayerId]?: PlayerState } = {};
   for (const id of playerIds) {
-    const deck = buildPlayerDeck();
-    const hand = deck.slice(0, INITIAL_HAND_SIZE);
-    const remainingDeck = deck.slice(INITIAL_HAND_SIZE);
+    const hand = Array.from({ length: INITIAL_HAND_SIZE }, () => drawRandomCard());
     players[id] = {
       id,
       stats: { hp: INITIAL_HP, mp: INITIAL_MP, pay: INITIAL_PAY },
       hand,
-      deck: remainingDeck,
+      deck: [],   // unused – kept for type compatibility
       discard: [],
     };
   }
@@ -60,4 +63,14 @@ export function createInitialState(playerIds: PlayerId[]): GameState {
     attackPlusActive: false,
     attackElementOverride: undefined,
   };
+}
+
+/** Legacy shuffle helper (kept for test compatibility). */
+export function shuffleDeck<T>(cards: readonly T[]): T[] {
+  const arr = [...cards];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j]!, arr[i]!];
+  }
+  return arr;
 }
