@@ -124,11 +124,25 @@ describe("battle.test.ts", () => {
     let state = createInitialState(["P1", "P2"]);
     state = gameReducer(state, { type: "DRAW" }); // → EXCHANGE_PHASE
 
+    // Inject an EXCHANGE card into P1's hand
+    const exchangeCard = makeCard({ type: "EXCHANGE", id: "exc-b1", mpCost: 0 });
+    state = {
+      ...state,
+      players: {
+        ...state.players,
+        P1: {
+          ...state.players["P1"]!,
+          hand: [...state.players["P1"]!.hand, exchangeCard],
+        },
+      },
+    };
+
     const p1 = state.players["P1"]!;
     const total = p1.stats.hp + p1.stats.mp + p1.stats.pay;
 
     state = gameReducer(state, {
       type: "EXCHANGE",
+      cardId: "exc-b1",
       allocations: { hp: 0, mp: total, pay: 0 },
     });
 

@@ -6,11 +6,13 @@
     "dev": "ts-node src/ui/cli/index.ts",
     "test": "jest",
     "build": "tsc",
-    "gui": "vite src/ui/browser"
+    "gui": "vite src/ui/browser --host 0.0.0.0",
+    "server": "ts-node src/server/index.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.0.0",
     "@types/node": "^20.0.0",
+    "@types/ws": "^8.18.1",
     "jest": "^29.0.0",
     "ts-jest": "^29.0.0",
     "ts-node": "^10.9.0",
@@ -28,5 +30,8 @@
       "js",
       "json"
     ]
+  },
+  "dependencies": {
+    "ws": "^8.19.0"
   }
 }

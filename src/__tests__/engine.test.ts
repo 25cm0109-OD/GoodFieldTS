@@ -42,12 +42,26 @@ describe("engine.test.ts", () => {
     const afterDraw = gameReducer(state, { type: "DRAW" });
     expect(afterDraw.phase).toBe("EXCHANGE_PHASE");
 
-    const p1 = afterDraw.players["P1"]!;
+    // Inject an EXCHANGE card so the action is valid
+    const exchangeCard = testCard("EXCHANGE", { id: "exc-test", mpCost: 0 });
+    const stateWithCard: GameState = {
+      ...afterDraw,
+      players: {
+        ...afterDraw.players,
+        P1: {
+          ...afterDraw.players["P1"]!,
+          hand: [...afterDraw.players["P1"]!.hand, exchangeCard],
+        },
+      },
+    };
+
+    const p1 = stateWithCard.players["P1"]!;
     const { mp, pay } = p1.stats;
     const total = p1.stats.hp + mp + pay;
 
-    const afterExchange = gameReducer(afterDraw, {
+    const afterExchange = gameReducer(stateWithCard, {
       type: "EXCHANGE",
+      cardId: "exc-test",
       allocations: { hp: 0, mp: total, pay: 0 },
     });
 
@@ -70,7 +84,7 @@ describe("engine.test.ts", () => {
     const base = createInitialState(["P1", "P2"]);
     const state: GameState = {
       ...base,
-      phase: "ATTACK_PHASE",
+      phase: "EXCHANGE_PHASE",
       players: {
         ...base.players,
         P1: {
@@ -90,35 +104,32 @@ describe("engine.test.ts", () => {
     expect(result.phase).toBe("DRAW_PHASE");
   });
 
-  // 4. attackPlusカード使用後 → 追加で攻撃カードを使用可能
-  test("attackPlusカード使用後→追加で攻撃カードを使用可能", () => {
+  // 4. 攻撃カードとattackPlusカードを1アクションで同時に使える
+  test("攻撃カードとattackPlusカードを1アクションで同時に使える", () => {
     const apCard = testCard("ATTACK", { id: "ap1", attackPlus: true, power: 5 });
     const atkCard = testCard("ATTACK", { id: "a1", power: 8 });
 
     const base = createInitialState(["P1", "P2"]);
     const state: GameState = {
       ...base,
-      phase: "ATTACK_PHASE",
+      phase: "EXCHANGE_PHASE",
       players: {
         ...base.players,
         P1: {
           ...base.players["P1"]!,
-          hand: [apCard, atkCard],
+          hand: [atkCard, apCard],
           stats: { hp: 30, mp: 99, pay: 10 },
+          deck: Array.from({ length: 5 }, (_, i) => testCard("DEFENSE", { id: `d${i}` })),
         },
       },
     };
 
-    const afterFirst = gameReducer(state, { type: "ATTACK", cards: [apCard] });
-    expect(afterFirst.attackPlusActive).toBe(true);
-    // Still in ATTACK_PHASE when attackPlus was played
-    expect(afterFirst.phase).toBe("ATTACK_PHASE");
-
-    const afterSecond = gameReducer(afterFirst, {
-      type: "ATTACK",
-      cards: [atkCard],
-    });
-    expect(afterSecond.attackCards.length).toBe(2);
+    // Play 1 main card + 1 attackPlus card in a single ATTACK action
+    const result = gameReducer(state, { type: "ATTACK", cards: [atkCard, apCard] });
+    // Both cards included in attackCards
+    expect(result.attackCards.length).toBe(2);
+    // After attack, always goes to DEFENSE_PHASE
+    expect(result.phase).toBe("DEFENSE_PHASE");
   });
 
   // 5. ターン交代ロジック（P1→P2→P1の順になること）
@@ -146,7 +157,6 @@ describe("engine.test.ts", () => {
     let state = gameReducer(setupState(base, "P1", "P2"), { type: "DRAW" });
     expect(state.playerOrder[state.activePlayerIndex]).toBe("P1");
 
-    state = gameReducer(state, { type: "END_EXCHANGE" });
     state = gameReducer(state, {
       type: "ATTACK",
       cards: [{ ...atkCard, id: "atk-p1-t1" }],
@@ -161,7 +171,6 @@ describe("engine.test.ts", () => {
 
     // P2's turn
     state = gameReducer(setupState(state, "P2", "P1"), { type: "DRAW" });
-    state = gameReducer(state, { type: "END_EXCHANGE" });
     state = gameReducer(state, {
       type: "ATTACK",
       cards: [{ ...atkCard, id: "atk-p2-t1" }],
@@ -174,36 +183,33 @@ describe("engine.test.ts", () => {
     expect(state.playerOrder[state.activePlayerIndex]).toBe("P1");
   });
 
-  // 6. デッキ切れ時に捨て札がシャッフルされてデッキに戻ること
-  test("デッキ切れ時に捨て札がシャッフルされてデッキに戻ること", () => {
-    const discardCards: Card[] = [
-      testCard("DEFENSE", { id: "disc1" }),
-      testCard("ATTACK", { id: "disc2" }),
-      testCard("EXCHANGE", { id: "disc3" }),
-    ];
+  // 6. 手札上限18枚：手札が満杯の時はドロー不可（スキップ）
+  test("手札上限18枚：手札が満杯の時はPRAYしてもドローされない", () => {
     const base = createInitialState(["P1", "P2"]);
+    // Fill P1's hand to exactly MAX_HAND_SIZE (18) with NON-attack cards
+    const fullHand = Array.from({ length: 18 }, (_, i) =>
+      testCard("EXCHANGE", { id: `hand-${i}` })
+    );
     const state: GameState = {
       ...base,
-      phase: "DRAW_PHASE",
+      phase: "EXCHANGE_PHASE",
       players: {
         ...base.players,
         P1: {
           ...base.players["P1"]!,
-          deck: [], // empty deck
-          discard: discardCards,
-          hand: [],
+          hand: fullHand,
+          deck: [],
         },
       },
     };
 
-    const result = gameReducer(state, { type: "DRAW" });
+    // PRAY: draws 1 card into hand, but hand is already full → draw skipped
+    const result = gameReducer(state, { type: "PRAY" });
     const p1 = result.players["P1"]!;
 
-    // Drew 1 card from shuffled discard
-    expect(p1.hand.length).toBe(1);
-    // Remaining cards are in deck (discard became deck)
-    expect(p1.deck.length + p1.discard.length).toBe(discardCards.length - 1);
-    // Discard should be empty after reshuffle
+    // Hand stays at 18 (draw was skipped because hand was full)
+    expect(p1.hand.length).toBe(18);
+    // Nothing discarded
     expect(p1.discard.length).toBe(0);
   });
 });

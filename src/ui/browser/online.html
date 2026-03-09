@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GoodField - オンライン対戦</title>
+    <link rel="stylesheet" href="./style.css" />
+    <style>
+      .lobby-box { max-width: 480px; margin: 60px auto; padding: 2rem; background: #1a1a2e; border-radius: 12px; border: 1px solid #444; }
+      .lobby-box h1 { text-align: center; color: #f0c040; margin-bottom: 1.5rem; }
+      .lobby-box input[type=text] { width: 100%; padding: .6rem .8rem; margin: .4rem 0 .8rem; background: #12122a; color: #eee; border: 1px solid #555; border-radius: 6px; font-size: 1rem; box-sizing: border-box; }
+      .lobby-box .btn-row { display: flex; gap: .6rem; }
+      .room-code { font-size: 2.5rem; font-weight: bold; letter-spacing: .4rem; color: #f0c040; text-align: center; margin: 1rem 0; }
+      .player-list { list-style: none; padding: 0; margin: .6rem 0 1rem; }
+      .player-list li { padding: .3rem .6rem; border-bottom: 1px solid #333; }
+      .player-list li .badge { font-size: .75rem; background: #f0c040; color: #000; border-radius: 4px; padding: 0 .4rem; margin-left: .4rem; }
+      .err-msg { color: #f55; font-size: .9rem; margin: .5rem 0; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./online.ts"></script>
+  </body>
+</html>
