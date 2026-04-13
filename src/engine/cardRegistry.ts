@@ -42,8 +42,8 @@ export const CARD_TEMPLATES: readonly CardTemplate[] = [
 
   // ── 単体攻撃武器 ─── 152 total (non-miracle, non-area) ──────────────────────
   // NEUTRAL 110
-  tpl("無の一撃",  "ATTACK", "NEUTRAL",  5, 0, { payCost: 0, frequency: 25 }),
-  tpl("無の斬撃",  "ATTACK", "NEUTRAL", 10, 0, { payCost: 0, frequency: 40 }),
+  tpl("無の一撃",  "ATTACK", "NEUTRAL",  5, 0, { payCost: 0, frequency: 15 }),
+  tpl("無の斬撃",  "ATTACK", "NEUTRAL", 10, 0, { payCost: 0, frequency: 10 }),
   tpl("無の大斬",  "ATTACK", "NEUTRAL", 15, 0, { payCost: 0, frequency: 15 }),
   tpl("無の連撃",  "ATTACK", "NEUTRAL",  8, 0, { payCost: 0, attackPlus: true, frequency: 30 }),
   // FIRE 9
@@ -63,10 +63,10 @@ export const CARD_TEMPLATES: readonly CardTemplate[] = [
   tpl("闇の鎌", "ATTACK", "DARK", 10, 0, { payCost: 0, frequency: 1 }),
 
   // ── 全体攻撃武器 ─── 18 total (area, non-miracle, no neutral) ───────────────
-  tpl("炎の嵐",   "ATTACK", "FIRE",  10, 0, { payCost: 0, areaAttackPercent: 50, frequency: 4 }),
-  tpl("暴風雨",   "ATTACK", "WATER",  8, 0, { payCost: 0, areaAttackPercent: 25, frequency: 4 }),
-  tpl("木の突風", "ATTACK", "WOOD",   8, 0, { payCost: 0, areaAttackPercent: 25, frequency: 3 }),
-  tpl("大地震",   "ATTACK", "EARTH", 12, 0, { payCost: 0, areaAttackPercent: 75, frequency: 3 }),
+  tpl("炎の嵐",   "ATTACK", "FIRE",  10, 0, { payCost: 0, areaAttackPercent: 50, frequency: 2 }),
+  tpl("暴風雨",   "ATTACK", "WATER",  8, 0, { payCost: 0, areaAttackPercent: 25, frequency: 3 }),
+  tpl("木の突風", "ATTACK", "WOOD",   8, 0, { payCost: 0, areaAttackPercent: 25, frequency: 2 }),
+  tpl("大地震",   "ATTACK", "EARTH", 12, 0, { payCost: 0, areaAttackPercent: 75, frequency: 2 }),
   tpl("光の爆発", "ATTACK", "LIGHT", 10, 0, { payCost: 0, areaAttackPercent: 50, frequency: 3 }),
   tpl("闇の波動", "ATTACK", "DARK",  10, 0, { payCost: 0, areaAttackPercent: 25, frequency: 1 }),
 
@@ -88,12 +88,12 @@ export const CARD_TEMPLATES: readonly CardTemplate[] = [
 
   // ── 指輪 (RING) ─── 8 total ──────────────────────────────────────────────────
   tpl("反射の指輪", "RING", "NEUTRAL",  0, 0, { payCost: 3, frequency: 2 }),
-  tpl("炎の指輪",   "RING", "FIRE",     0, 0, { payCost: 3, frequency: 1 }),
-  tpl("水の指輪",   "RING", "WATER",    0, 0, { payCost: 3, frequency: 1 }),
-  tpl("木の指輪",   "RING", "WOOD",     0, 0, { payCost: 3, frequency: 1 }),
-  tpl("土の指輪",   "RING", "EARTH",    0, 0, { payCost: 3, frequency: 1 }),
-  tpl("光の指輪",   "RING", "LIGHT",    0, 0, { payCost: 3, frequency: 1 }),
-  tpl("闇の指輪",   "RING", "DARK",     0, 0, { payCost: 3, frequency: 1 }),
+  tpl("炎の指輪",   "RING", "FIRE",     0, 0, { payCost: 3, frequency: 3 }),
+  tpl("水の指輪",   "RING", "WATER",    0, 0, { payCost: 3, frequency: 4 }),
+  tpl("木の指輪",   "RING", "WOOD",     0, 0, { payCost: 3, frequency: 4 }),
+  tpl("土の指輪",   "RING", "EARTH",    0, 0, { payCost: 3, frequency: 3 }),
+  tpl("光の指輪",   "RING", "LIGHT",    0, 0, { payCost: 3, frequency: 2 }),
+  tpl("闇の指輪",   "RING", "DARK",     0, 0, { payCost: 3, frequency: 3 }),
 
   // ── 奇跡 (isMiracle) ─── 30 total ────────────────────────────────────────────
   // NEUTRAL 11
@@ -117,27 +117,27 @@ export const CARD_TEMPLATES: readonly CardTemplate[] = [
 
   // ── 雑貨 ─── 88 total (全てNEUTRAL) ─────────────────────────────────────────
   // HEAL_HP 12
-  tpl("回復薬",       "HEAL_HP", "NEUTRAL", 20, 0, { payCost:  5, frequency:  8 }),
-  tpl("大回復薬",     "HEAL_HP", "NEUTRAL", 40, 0, { payCost: 10, frequency:  4 }),
+  tpl("回復薬",       "HEAL_HP", "NEUTRAL", 10, 0, { payCost:  5, frequency:  8 }),
+  tpl("大回復薬",     "HEAL_HP", "NEUTRAL", 20, 0, { payCost: 10, frequency:  4 }),
   // HEAL_MP 12
   tpl("マナポーション",   "HEAL_MP", "NEUTRAL", 15, 0, { payCost:  5, frequency: 8 }),
-  tpl("大マナポーション", "HEAL_MP", "NEUTRAL", 30, 0, { payCost: 10, frequency: 4 }),
-  // SELL/BUY 10
-  tpl("行商人の業", "SELL", "NEUTRAL", 0, 0, { payCost: 5, frequency: 5 }),
-  tpl("買い付け",   "BUY",  "NEUTRAL", 0, 0, { payCost: 8, frequency: 5 }),
+  tpl("大マナポーション", "HEAL_MP", "NEUTRAL", 20, 0, { payCost: 10, frequency: 4 }),
+  // SELL/BUY 10s
+  tpl("売る",   "SELL", "NEUTRAL", 0, 0, { payCost: 5, frequency: 60 }),
+  tpl("買う",   "BUY",  "NEUTRAL", 0, 0, { payCost: 8, frequency: 60 }),
   // 新カード 9
   tpl("天国の薬",     "HEAVEN_DISEASE_HEAL", "NEUTRAL", 20, 0, { payCost: 3, frequency: 3 }),
   tpl("厄払いの書",   "CLEANSE",             "NEUTRAL",  0, 0, { payCost: 5, frequency: 3 }),
   tpl("奇跡消しの書", "DISPEL_MIRACLE",      "NEUTRAL",  0, 0, { payCost: 8, frequency: 3 }),
   // DISASTER 45 (全てNEUTRAL)
-  tpl("風邪のたね",   "DISASTER", "NEUTRAL", 0, 0, { payCost: 0, ailment: "風邪",   frequency: 7 }),
+  tpl("風邪のたね",   "DISASTER", "NEUTRAL", 0, 0, { payCost: 0, ailment: "風邪",   frequency: 30}),
   tpl("熱病の呪い",   "DISASTER", "NEUTRAL", 0, 0, { payCost: 3, ailment: "熱病",   frequency: 6 }),
   tpl("地獄病の瘴気", "DISASTER", "NEUTRAL", 0, 0, { payCost: 5, ailment: "地獄病", frequency: 6 }),
   tpl("天国病の光",   "DISASTER", "NEUTRAL", 0, 0, { payCost: 4, ailment: "天国病", frequency: 4 }),
   tpl("霧のとばり",   "DISASTER", "NEUTRAL", 0, 0, { payCost: 0, ailment: "霧",     frequency: 6 }),
-  tpl("閃光の呪縛",   "DISASTER", "NEUTRAL", 0, 0, { payCost: 0, ailment: "閃光",   frequency: 6 }),
+  tpl("閃光の呪縛",   "DISASTER", "NEUTRAL", 0, 0, { payCost: 0, ailment: "閃光",   frequency: 26 }),
   tpl("夢幻の霞",     "DISASTER", "NEUTRAL", 0, 0, { payCost: 0, ailment: "夢",     frequency: 5 }),
-  tpl("暗雲の呪い",   "DISASTER", "NEUTRAL", 0, 0, { payCost: 2, ailment: "暗雲",   frequency: 5 }),
+  tpl("暗雲の呪い",   "DISASTER", "NEUTRAL", 0, 0, { payCost: 2, ailment: "暗雲",   frequency: 25 }),
 ];
 
 /** Create a Card instance from a template, assigning a unique incremental ID. */

@@ -10,17 +10,22 @@ npm test           # 全テスト実行
 npm run build      # TypeScriptコンパイル → dist/
 ```
 
+> このリポジトリには lint 用 npm script は未定義。静的チェックは `npm run build`（TypeScript strict）で行う。
+
 **単一テストファイルの実行:**
 ```bash
 npx jest src/__tests__/engine.test.ts
 npx jest src/__tests__/battle.test.ts
 npx jest --testNamePattern="<テスト名の一部>"
+npx jest src/__tests__/engine.test.ts --testNamePattern="<テスト名の一部>"
 ```
 
 **オンライン対戦の起動:**
 ```bash
 # ターミナル1
-npm run gui      # Vite (ポート5173) → http://localhost:5173/online.html
+npm run gui      # Vite (ポート5173)
+                 # → http://localhost:5173/index.html (ローカル対戦・AI対戦)
+                 # → http://localhost:5173/online.html (オンライン対戦)
 
 # ターミナル2
 npm run server   # WebSocket (ポート3001)
@@ -48,17 +53,27 @@ DRAW_PHASE → EXCHANGE_PHASE → DEFENSE_PHASE → RESOLVE_PHASE → END_CHECK 
 - `server/index.ts` — WebSocketサーバー（部屋管理・ゲームアクションのブロードキャスト）
 - `network/protocol.ts` — オンライン化準備用の型定義のみ
 
+**オンラインUIの責務分離（`src/ui/browser/online.ts`）:**
+- サーバーからの `GAME_STATE` 差分をもとに `PreviewEvent` を生成し、`buildWatcherCardsCol` に段階表示する。
+- プレビュー表示中は `buildStagingView` / `buildDefenseStagingView` を遅延し、観戦カラムを優先する。
+- 新規ドローの伏せ表示（`newlyDrawnCardIds`）は、watcher プレビュー完了後に開示する。
+- フェーズ制御の真実は `GameState.phase` で、UIはその投影のみを行う（ローカル状態でフェーズを進めない）。
+
+**TypeScript設定:** `strict: true` を有効化。全プロパティは `readonly` で不変性を強制。
+
 ## Key Conventions
 
 **不変性:** 全ステート更新はスプレッド構文（`{...state}`）で行う。`domain/types.ts` の全プロパティは `readonly`。
 
 **ステータス制約:** HP/MP/PAY は常に `clampStat()` で [0, 99] にクランプ。
 
-**手札上限:** `MAX_HAND_SIZE = 20`（`initialState.ts`）。21枚目を入手した際はランダムで既存カード1枚を廃棄（奇跡カードも含む）。
+**手札上限:** `MAX_HAND_SIZE = 18`（`initialState.ts`）。手札が上限の場合、ドローは無音で失敗する（カードは廃棄されない）。BUY/SELL でのカード受け取りも同様に `hand.length < MAX_HAND_SIZE` をチェックしてブロックする。
 
 **PAY消費フォールバック:** PAYが不足する場合は MP → HP の順に補填（`consumePay()` in `gameEngine.ts`）。厳密な順序: PAY全量消費 → 残りをMP → さらに残りをHP。いずれも不足で null 返却（アクション失敗）。BUY・SELL・USE_DISASTER のコストに適用（攻撃MPコストは別途チェック）。
 
-**奇跡カード（`permanent: true`）:** 使用後に捨て札ではなく手札の末尾に戻る。`playCards()` ヘルパーが `permanent` フラグでルーティングする。
+**奇跡カード（`isMiracle: true`）:** 使用後に捨て札ではなく手札の末尾に戻る（`wasUsed: true` にセット）。`playCards()` ヘルパーが `isMiracle` フラグでルーティングする。`wasUsed: true` の奇跡カードは SELL できない。`DISPEL_MIRACLE` は `isMiracle && wasUsed` のカードを対象とする（最大2枚）。
+
+**使用済み奇跡の再使用ドロー:** `wasUsed: true` の奇跡カードを再使用した場合、通常ドローに加えて追加で1枚ドローする（アクションごとの基礎ドロー判定 + ボーナス）。
 
 **通常攻撃とMPコスト:** `ATTACK` 型カードはMPを消費しない。`MIRACLE_ATK` のみ `mpCost` を消費する。
 
@@ -68,7 +83,7 @@ DRAW_PHASE → EXCHANGE_PHASE → DEFENSE_PHASE → RESOLVE_PHASE → END_CHECK 
 
 **`actionUsedThisTurn` フラグ:** `ATTACK`、`EXCHANGE`、`BUY`、`SELL`、`USE_HEAL` 使用後にセットされ、同一ターン内での再使用をブロックする。`PRAY` はこのフラグをセットしない（攻撃カードがない時の脱出手段のため）。
 
-**PRYAフロー:** 手札に攻撃カードが1枚もない場合のみ使用可。1枚ドローして即座に次プレイヤーの `DRAW_PHASE` へ遷移（ターンスキップ）。
+**PRAYフロー:** 手札に攻撃カードが1枚もない場合のみ使用可。1枚ドローして即座に次プレイヤーの `DRAW_PHASE` へ遷移（ターンスキップ）。
 
 **BUYフロー:** `BUY` アクション実行後、state に `pendingBuyConsent` がセットされる。対象プレイヤーが `ACCEPT_BUY` または `DECLINE_BUY` を送信するまで次の操作はブロックされる。`ACCEPT_BUY` 時のみ購入者が `payCost` を支払う（`consumePay` 経由）。
 
@@ -76,7 +91,7 @@ DRAW_PHASE → EXCHANGE_PHASE → DEFENSE_PHASE → RESOLVE_PHASE → END_CHECK 
 
 **反射防御:** DEFENSE_PHASE 中、実際の防御対象プレイヤーのみが `DEFEND` アクションで防御カードをセット可能。攻撃者（active player）は DEFENSE_PHASE に関与しない。`REFLECT_PHYSICAL` は通常 ATTACK のみ反射（`MIRACLE_ATK` は対象外）、`REFLECT_ALL` は両方反射。反射発生時は攻撃者が攻撃力そのままのダメージを受ける（軽減不可）。反射後、攻撃者が防御する第2 DEFENSE_PHASE が発生し、反射ダメージは `pendingReflect: { damage, element }` に保存される。全体攻撃の場合、複数守備者からの反射ダメージが蓄積する。
 
-**カード定義の編集:** `src/engine/cardRegistry.ts` の `CARD_TEMPLATES` 配列を変更する。各エントリの `frequency` フィールドが500枚プール内での出現枚数を決める。
+**カード定義の編集:** `src/engine/cardRegistry.ts` の `CARD_TEMPLATES` 配列を変更する。各エントリの `frequency` フィールドが492枚プール（`POOL_SIZE = 492`）内での出現枚数を決める。合計が不足する場合はテンプレートを循環してパディング。
 
 **属性ルール（`elementSystem.ts` が唯一の実装場所）:**
 - 異なる属性の同時使用 → NEUTRAL
@@ -89,9 +104,17 @@ DRAW_PHASE → EXCHANGE_PHASE → DEFENSE_PHASE → RESOLVE_PHASE → END_CHECK 
 
 **`attackPlus` と `doubler`:** どちらも使用後に `attackPlusActive=true` をセットし、`EXCHANGE_PHASE` に留まる（追加攻撃可）。効果は同一。
 
-**`lightAsElement`（ATTACKアクション）:** LIGHT属性カードを指定属性として扱う場合に `ATTACK` アクションへ `lightAsElement: Element` を渡す。`attackElementOverride` として state に保存され、RESOLVE時に適用される。
+**`lightAsElement`（ATTACKアクション）:** LIGHT属性カードを指定属性として扱う場合に `ATTACK` アクションへ `lightAsElement: Element` を渡す。`attackElementOverride` として state に保存され、RESOLVE時に適用される。`END_TURN` まで保持される（全体攻撃の複数ターゲット処理にも持続）。
 
 **`HEAL_HP` / `HEAL_MP` カード:** EXCHANGE_PHASE に `USE_HEAL` アクション（`{ type: "USE_HEAL", cardId, targetId? }`）で使用。`targetId` を省略すると自分を回復。カードの `power` 分だけ HP または MP を回復する。
+
+**`HEAVEN_DISEASE_HEAL` カード:** `USE_HEAL` アクション経由で使用。MP を `power` 分回復した後、使用者に天国病を付与する（常に自己対象、targetId 不可）。
+
+**`RING` カード（反射の指輪）:** type `"RING"`、power 0 の防御カード。ダメージ > 0 を受けた際、攻撃者への反撃ダメージを `pendingRingAttack` に蓄積し、攻撃者が DEFENSE_PHASE を経験する。REFLECT が発動した場合は RING は処理されない（排他的）。
+
+**`USE_CLEANSE` / `USE_DISPEL_MIRACLE` アクション:** いずれも PAY を消費（`consumePay` 経由）。`USE_CLEANSE` は自己対象なら即時適用、相手対象なら `PendingTargetedAction` 経由（反射可能）。`USE_DISPEL_MIRACLE` は常に相手対象で `PendingTargetedAction` 経由。
+
+**EXCHANGE アクション制約:** `cardId` 必須。振り分け後の HP/MP/PAY の合計が現在の合計と等しくなければならない（保存則）。HP=0 になる振り分けはアクション失敗。
 
 **`deck` フィールド:** 各プレイヤーの `deck` は常に空配列。個別デッキは存在せず、ドローは全て共有プールの `drawRandomCard()` 経由。型互換のためフィールドのみ保持。
 
@@ -99,7 +122,13 @@ DRAW_PHASE → EXCHANGE_PHASE → DEFENSE_PHASE → RESOLVE_PHASE → END_CHECK 
 
 **カードID形式:** `card-{連番}` (例: `"card-1"`, `"card-42"`)。グローバルカウンター `_cardIdCounter` でインクリメント。
 
-**プレイヤー離脱（3人以上）:** RESOLVE_PHASE 後に HP=0 のプレイヤーは `playerOrder` から即時除外。残り1人以下になれば `GAME_OVER`。攻撃者も反射ダメージでHP=0になる場合がある。複数人が同時に除外されてから生存者チェックを行う。
+**自己攻撃:** `attackTarget === activeId` の場合は DEFENSE_PHASE をスキップして直接 RESOLVE_PHASE へ遷移。反射不可。
+
+**プレイヤー離脱（3人以上）:** RESOLVE_PHASE 後に HP=0 のプレイヤーは `playerOrder` から即時除外。残り1人以下になれば `GAME_OVER`（survivors.length === 0 なら `isDraw: true`）。攻撃者も反射・RING ダメージでHP=0になる場合がある。複数人が同時に除外されてから生存者チェックを行う。
+
+**`END_TURN` アクション:** `END_CHECK` フェーズでのみ有効。`activePlayerIndex` を次に進め、全攻防・保留状態をリセット（`TURN_RESET`）して `DRAW_PHASE` に遷移。
+
+**`getCardCategory()`:** `cardRegistry.ts` でカードの表示カテゴリを返す。`isMiracle: true` → `"奇跡"`（型より優先）、ATTACK → `"武器"`、DEFENSE/REFLECT/RING → `"防具"`、EXCHANGE → `"取引"`、それ以外 → `"雑貨"`。夢アイルメントのカード表示偽装に使用。
 
 **テストヘルパー（ファイル別）:**
 - `engine.test.ts`: `testCard(type, overrides?)` / `stateAtPhase(phase, playerOrder?)`
@@ -134,7 +163,7 @@ EXCHANGEアクションに `cardId` が必要な場合は、テスト内でEXCHA
 
 ## Server Patterns
 
-**部屋コード形式:** 4文字英数字（母音 O/I と数字 0/1 を除外してコード読み違いを防止）。
+**部屋作成方式:** ホストが指定した合言葉で部屋を作成・参加する（日本語可、完全一致）。
 
 **ホスト再割り当て:** ホストが退出した場合、残った最初のプレイヤーが新ホストになる。
 

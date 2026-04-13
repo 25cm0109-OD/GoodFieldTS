@@ -14,7 +14,7 @@ interface RoomPlayer {
 }
 
 interface Room {
-  code: string;
+  passphrase: string;
   players: Map<WebSocket, RoomPlayer>;
   gameState: GameState | null;
   status: "lobby" | "playing";
@@ -23,19 +23,6 @@ interface Room {
 // ─── State ────────────────────────────────────────────────────────────────────
 
 const rooms = new Map<string, Room>();
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function generateCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code: string;
-  do {
-    code = Array.from({ length: 4 }, () =>
-      chars[Math.floor(Math.random() * chars.length)]
-    ).join("");
-  } while (rooms.has(code));
-  return code;
-}
 
 function send(ws: WebSocket, msg: object): void {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
@@ -97,7 +84,15 @@ wss.on("connection", (ws) => {
       // ── Lobby ──────────────────────────────────────────────────────────────
       case "CREATE_ROOM": {
         if (currentRoom) return; // already in a room
-        const code = generateCode();
+        const passphrase = String(msg["passphrase"] ?? "").trim();
+        if (!passphrase) {
+          send(ws, { type: "ERROR", message: "合言葉を入力してください" });
+          return;
+        }
+        if (rooms.has(passphrase)) {
+          send(ws, { type: "ERROR", message: "同じ合言葉の部屋が既にあります" });
+          return;
+        }
         const player: RoomPlayer = {
           ws,
           id: "P1",
@@ -105,23 +100,27 @@ wss.on("connection", (ws) => {
           isHost: true,
         };
         const room: Room = {
-          code,
+          passphrase,
           players: new Map([[ws, player]]),
           gameState: null,
           status: "lobby",
         };
-        rooms.set(code, room);
+        rooms.set(passphrase, room);
         currentRoom = room;
         currentPlayer = player;
-        send(ws, { type: "ROOM_CREATED", roomCode: code, playerId: "P1" });
+        send(ws, { type: "ROOM_CREATED", passphrase, playerId: "P1" });
         broadcast(room, { type: "LOBBY_STATE", players: lobbySnapshot(room) });
         break;
       }
 
       case "JOIN_ROOM": {
         if (currentRoom) return;
-        const code = String(msg["roomCode"] ?? "").toUpperCase();
-        const room = rooms.get(code);
+        const passphrase = String(msg["passphrase"] ?? "").trim();
+        if (!passphrase) {
+          send(ws, { type: "ERROR", message: "合言葉を入力してください" });
+          return;
+        }
+        const room = rooms.get(passphrase);
         if (!room) { send(ws, { type: "ERROR", message: "部屋が見つかりません" }); return; }
         if (room.status === "playing") { send(ws, { type: "ERROR", message: "ゲームは既に開始しています" }); return; }
         if (room.players.size >= 9) { send(ws, { type: "ERROR", message: "満員です（最大9人）" }); return; }
@@ -137,7 +136,7 @@ wss.on("connection", (ws) => {
         room.players.set(ws, player);
         currentRoom = room;
         currentPlayer = player;
-        send(ws, { type: "ROOM_JOINED", roomCode: code, playerId });
+        send(ws, { type: "ROOM_JOINED", passphrase, playerId });
         broadcast(room, { type: "LOBBY_STATE", players: lobbySnapshot(room) });
         break;
       }
@@ -184,7 +183,7 @@ wss.on("connection", (ws) => {
     if (!currentRoom || !currentPlayer) return;
     currentRoom.players.delete(ws);
     if (currentRoom.players.size === 0) {
-      rooms.delete(currentRoom.code);
+      rooms.delete(currentRoom.passphrase);
     } else {
       // Re-assign host if needed
       if (currentPlayer.isHost) {

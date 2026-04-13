@@ -1,60 +1,27 @@
-import { GameState, GameAction, Card, PlayerId, Phase, Element } from "../../domain/types";
+import { GameState, GameAction, Card, PlayerId, Element } from "../../domain/types";
 import { createInitialState } from "../../engine/initialState";
 import { gameReducer, MAX_STAT } from "../../engine/gameEngine";
 import { canDefend } from "../../engine/elementSystem";
-
+// ブラウザUIとオンラインUIで重複していた表示定数/判定は shared に集約する。
+import { isAttackCard, isDefenseCard } from "../shared/cardPredicates";
+import {
+  ELEMENT_EMOJI,
+  ELEMENT_LABEL,
+  TYPE_LABEL,
+  PHASE_LABEL,
+} from "../shared/cardUiLabels";
+import {
+  isAnimPlaying,
+  runAreaAttackAnim,
+  triggerScreenShake,
+  cancelAnim,
+} from "./battleAnimController";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const LOCAL_PLAYER: PlayerId = "P1";
 const AI_PLAYER: PlayerId = "P2";
 /** Number of card slots shown in the hand area (initial draw = 7, +1 per draw). */
 const HAND_DISPLAY_SLOTS = 8;
-
-const ELEMENT_EMOJI: Record<Element, string> = {
-  FIRE: "🔥",
-  WATER: "💧",
-  WOOD: "🌿",
-  EARTH: "🪨",
-  LIGHT: "☀️",
-  DARK: "🌑",
-  NEUTRAL: "⬜",
-};
-
-const ELEMENT_LABEL: Record<Element, string> = {
-  FIRE: "火",
-  WATER: "水",
-  WOOD: "木",
-  EARTH: "土",
-  LIGHT: "光",
-  DARK: "闇",
-  NEUTRAL: "無",
-};
-
-const TYPE_LABEL: Record<string, string> = {
-  ATTACK: "攻",
-  DEFENSE: "守",
-  EXCHANGE: "両替",
-  SELL: "売",
-  BUY: "買",
-  HEAL_HP: "HP回復",
-  HEAL_MP: "MP回復",
-  REFLECT_PHYSICAL: "跳ね返し",
-  REFLECT_ALL: "全跳ね返し",
-  DISASTER: "災い",
-  RING: "指輪",
-  CLEANSE: "厄払い",
-  DISPEL_MIRACLE: "奇跡消し",
-  HEAVEN_DISEASE_HEAL: "天国の薬",
-};
-
-const PHASE_LABEL: Record<Phase, string> = {
-  DRAW_PHASE: "ドロー",
-  EXCHANGE_PHASE: "アクション",
-  DEFENSE_PHASE: "防御",
-  RESOLVE_PHASE: "解決",
-  END_CHECK: "終了確認",
-  GAME_OVER: "ゲームオーバー",
-};
 
 // ─── Mutable State ────────────────────────────────────────────────────────────
 
@@ -79,6 +46,8 @@ let revealTimer: ReturnType<typeof setTimeout> | null = null;
 let ascendingPlayers: string[] = [];
 let ascensionDisplayTimer: ReturnType<typeof setTimeout> | null = null;
 let showMiraclePanel = false;
+/** True while a global-attack animation is running; blocks UI input and auto-advance. */
+let uiLocked = false;
 
 interface PreviewEvent {
   casterLabel: string;
@@ -130,19 +99,6 @@ function addLog(msg: string): void {
   const ts = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
   logMessages.push(`[${ts}] ${msg}`);
   if (logMessages.length > 100) logMessages.shift();
-}
-
-function isAttackCard(card: Card): boolean {
-  return card.type === "ATTACK";
-}
-
-function isDefenseCard(card: Card): boolean {
-  return (
-    card.type === "DEFENSE" ||
-    card.type === "REFLECT_PHYSICAL" ||
-    card.type === "REFLECT_ALL" ||
-    card.type === "RING"
-  );
 }
 
 // ─── Dispatch ────────────────────────────────────────────────────────────────
@@ -281,6 +237,38 @@ function dispatch(action: GameAction): void {
     pushPreview({ casterLabel: "🔄 跳ね返し", cards: [], targetLabel: nameOf(pta.currentTargetId), key: Date.now() });
   }
 
+  // ── Area attack animation pipeline ──────────────────────────────────────
+  // Fires when an ATTACK with areaAttackPercent is processed and areaHitResults
+  // are first populated. Locks UI for the duration of the visual pipeline.
+  if (
+    action.type === "ATTACK" &&
+    !prev.areaHitResults &&
+    gameState.areaHitResults &&
+    gameState.areaHitResults.length > 0
+  ) {
+    const atkCard = gameState.attackCards[0];
+    if (atkCard?.areaAttackPercent) {
+      uiLocked = true;
+      clearPhaseTimer(); // reset timer; restarts after animation
+      const hitResults = gameState.areaHitResults.map(r => ({
+        playerId: r.playerId as string,
+        hit: r.hit,
+      }));
+      runAreaAttackAnim({
+        cardName: atkCard.name,
+        hitResults,
+        getTargetRow: (pid) =>
+          document.querySelector<HTMLElement>(`[data-player-id="${pid}"]`),
+        onComplete: () => {
+          uiLocked = false;
+          render();
+          scheduleAutoAdvance();
+          schedulePhaseTimer();
+        },
+      });
+    }
+  }
+
   selectedCards = [];
   selectedTarget = null;
   // RESOLVE_PHASE後のHP=0プレイヤーを検出
@@ -295,6 +283,7 @@ function dispatch(action: GameAction): void {
     }
     if (newlyDead.length > 0) {
       ascendingPlayers = newlyDead;
+      triggerScreenShake(200);
       if (ascensionDisplayTimer) clearTimeout(ascensionDisplayTimer);
       ascensionDisplayTimer = setTimeout(() => {
         ascendingPlayers = [];
@@ -311,6 +300,7 @@ function dispatch(action: GameAction): void {
 // ─── Auto-Advance ────────────────────────────────────────────────────────────
 
 function scheduleAutoAdvance(): void {
+  if (isAnimPlaying()) return; // animation pipeline controls timing
   if (autoAdvanceTimer !== null) {
     clearTimeout(autoAdvanceTimer);
     autoAdvanceTimer = null;
@@ -484,6 +474,7 @@ function executeLocalDefenseAction(): void {
 }
 
 function schedulePhaseTimer(): void {
+  if (isAnimPlaying()) return; // animation pipeline controls timing
   const gs = gameState;
   const activeId = getActiveId();
   const { phase } = gs;
@@ -633,6 +624,9 @@ function handleRestart(): void {
     clearTimeout(autoAdvanceTimer);
     autoAdvanceTimer = null;
   }
+  cancelAnim();
+  uiLocked = false;
+  clearPhaseTimer();
   gameState = createInitialState([LOCAL_PLAYER, AI_PLAYER]);
   selectedCards = [];
   hoveredCard = null;
@@ -891,6 +885,9 @@ function render(): void {
 
   _lastDetailCardId = undefined; // force detail panel redraw after full render
   app.innerHTML = "";
+
+  if (uiLocked) app.classList.add("ui-locked");
+  else app.classList.remove("ui-locked");
 
   app.appendChild(buildTopBar());
   const banner = buildCombatBanner();
@@ -1610,6 +1607,7 @@ function buildOpponentsArea(): HTMLElement {
       isSelf ? "is-self" : "",
     ].filter(Boolean).join(" ");
     const row = el("div", { className: classes });
+    row.setAttribute("data-player-id", id);
 
     const avCls = isSelf ? "p1" : id === "P2" ? "p2" : "p1";
     const avatar = el("div", { className: `avatar ${avCls}`, textContent: id });

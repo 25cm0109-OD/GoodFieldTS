@@ -212,4 +212,60 @@ describe("engine.test.ts", () => {
     // Nothing discarded
     expect(p1.discard.length).toBe(0);
   });
+
+  test("使用済み奇跡(ATTACK)を再使用すると追加で1枚ドローする", () => {
+    const reusedMiracleAtk = testCard("ATTACK", {
+      id: "miracle-atk-reused",
+      isMiracle: true,
+      wasUsed: true,
+      mpCost: 1,
+      power: 7,
+    });
+    const base = createInitialState(["P1", "P2"]);
+    const state: GameState = {
+      ...base,
+      phase: "EXCHANGE_PHASE",
+      players: {
+        ...base.players,
+        P1: {
+          ...base.players["P1"]!,
+          hand: [reusedMiracleAtk],
+          stats: { ...base.players["P1"]!.stats, mp: 99 },
+        },
+      },
+    };
+
+    const before = state.players["P1"]!.hand.length;
+    const result = gameReducer(state, { type: "ATTACK", cards: [reusedMiracleAtk], target: "P2" });
+    const after = result.players["P1"]!.hand.length;
+    expect(after).toBe(before + 1);
+  });
+
+  test("未使用奇跡(ATTACK)の初回使用では追加ドローしない", () => {
+    const freshMiracleAtk = testCard("ATTACK", {
+      id: "miracle-atk-fresh",
+      isMiracle: true,
+      wasUsed: false,
+      mpCost: 1,
+      power: 7,
+    });
+    const base = createInitialState(["P1", "P2"]);
+    const state: GameState = {
+      ...base,
+      phase: "EXCHANGE_PHASE",
+      players: {
+        ...base.players,
+        P1: {
+          ...base.players["P1"]!,
+          hand: [freshMiracleAtk],
+          stats: { ...base.players["P1"]!.stats, mp: 99 },
+        },
+      },
+    };
+
+    const before = state.players["P1"]!.hand.length;
+    const result = gameReducer(state, { type: "ATTACK", cards: [freshMiracleAtk], target: "P2" });
+    const after = result.players["P1"]!.hand.length;
+    expect(after).toBe(before);
+  });
 });

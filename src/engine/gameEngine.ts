@@ -207,6 +207,11 @@ function drawNCards(player: PlayerState, n: number): PlayerState {
   return p;
 }
 
+/** 1度使用済み(wasUsed=true)の奇跡カードを再使用した場合の追加ドロー数。 */
+function bonusDrawForReusedMiracle(cards: readonly Card[]): number {
+  return cards.some((c) => !!c.isMiracle && !!c.wasUsed) ? 1 : 0;
+}
+
 /** Shared reset fields applied at end of turn / after PRAY. */
 const TURN_RESET: Partial<GameState> = {
   attackCards: [],
@@ -845,9 +850,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (hp + mp + pay !== currentTotal) return state;
 
       const newStats = { hp: clampStat(hp), mp: clampStat(mp), pay: clampStat(pay) };
-      // Play the exchange card then draw 1 (non-permanent → 1 draw)
+      // Play the exchange card then draw 1 + (used miracle reuse bonus)
       let newPlayer = playCards(activePlayer, [exchangeCard]);
-      newPlayer = drawNCards(newPlayer, 1);
+      newPlayer = drawNCards(newPlayer, 1 + bonusDrawForReusedMiracle([exchangeCard]));
       newPlayer = { ...newPlayer, stats: newStats };
 
       const newState: GameState = {
@@ -896,9 +901,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const revealIdx = Math.floor(Math.random() * target.hand.length);
       const revealedCard = target.hand[revealIdx]!;
 
-      // Consume the BUY card and draw 1 (cost is charged only on ACCEPT_BUY)
+      // Consume the BUY card and draw 1 + (used miracle reuse bonus)
       let newBuyer = playCards(activePlayer, [buyCard]);
-      newBuyer = drawNCards(newBuyer, 1);
+      newBuyer = drawNCards(newBuyer, 1 + bonusDrawForReusedMiracle([buyCard]));
 
       return {
         ...state,
@@ -974,9 +979,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
       const price = itemCard.payCost ?? 0;
 
-      // Play SELL card (draw 1), remove item from hand for staging
+      // Play SELL card (draw 1 + used miracle reuse bonus), remove item from hand for staging
       let newSeller = playCards(activePlayer, [sellCard]);
-      newSeller = drawNCards(newSeller, 1);
+      newSeller = drawNCards(newSeller, 1 + bonusDrawForReusedMiracle([sellCard]));
       // Remove item from seller's hand — stored in PTA; draw happens after resolve
       newSeller = {
         ...newSeller,
@@ -1016,7 +1021,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (healCard.type === "HEAVEN_DISEASE_HEAL") {
         const newMp = clampStat(activePlayer.stats.mp + healCard.power);
         let newActivePlayer = playCards(activePlayer, [healCard]);
-        newActivePlayer = drawNCards(newActivePlayer, 1);
+        newActivePlayer = drawNCards(newActivePlayer, 1 + bonusDrawForReusedMiracle([healCard]));
         newActivePlayer = {
           ...newActivePlayer,
           stats: { ...newActivePlayer.stats, mp: newMp },
@@ -1037,9 +1042,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
       // Remove card from active player's hand and draw
       let newActivePlayer = playCards(activePlayer, [healCard]);
-      if (!healCard.isMiracle) {
-        newActivePlayer = drawNCards(newActivePlayer, 1);
-      }
+      const healBaseDraw = healCard.isMiracle ? 0 : 1;
+      newActivePlayer = drawNCards(newActivePlayer, healBaseDraw + bonusDrawForReusedMiracle([healCard]));
 
       // Targeting an opponent: stage as PendingTargetedAction → DEFENSE_PHASE
       if (healTargetId !== activeId) {
@@ -1098,7 +1102,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         stats: { ...activePlayer.stats, pay: clampStat(activePlayer.stats.pay - cost) },
       };
       newActivePlayer = playCards(newActivePlayer, [cleanseCard]);
-      newActivePlayer = drawNCards(newActivePlayer, 1);
+      newActivePlayer = drawNCards(newActivePlayer, 1 + bonusDrawForReusedMiracle([cleanseCard]));
 
       // Targeting an opponent: stage as PendingTargetedAction → DEFENSE_PHASE
       if (targetId !== activeId) {
@@ -1148,7 +1152,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         stats: { ...activePlayer.stats, pay: clampStat(activePlayer.stats.pay - cost) },
       };
       newActivePlayer = playCards(newActivePlayer, [dispelCard]);
-      newActivePlayer = drawNCards(newActivePlayer, 1);
+      newActivePlayer = drawNCards(newActivePlayer, 1 + bonusDrawForReusedMiracle([dispelCard]));
 
       // Always stage as PendingTargetedAction (targetId is always explicit for DISPEL_MIRACLE)
       return {
@@ -1202,7 +1206,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       );
       // Draw for each non-miracle card played
       const nonMiracleCount = cards.filter((c) => !c.isMiracle).length;
-      newPlayer = drawNCards(newPlayer, nonMiracleCount);
+      newPlayer = drawNCards(newPlayer, nonMiracleCount + bonusDrawForReusedMiracle(cards));
 
       const hasAttackPlus = cards.some((c) => c.attackPlus || c.doubler);
 
@@ -1328,6 +1332,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       for (let i = 0; i < nonMiracleDefCount; i++) {
         newDefender = drawCardToHand(newDefender);
       }
+      newDefender = drawNCards(newDefender, bonusDrawForReusedMiracle(defCards));
 
       const existing = state.defenseCards[playerId] ?? [];
       return {
@@ -1409,7 +1414,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         stats: { ...activePlayer.stats, pay: clampStat(activePlayer.stats.pay - cost) },
       };
       newActivePlayer = playCards(newActivePlayer, [disasterCard]);
-      newActivePlayer = drawNCards(newActivePlayer, 1);
+      newActivePlayer = drawNCards(newActivePlayer, 1 + bonusDrawForReusedMiracle([disasterCard]));
 
       // Targeting an opponent: stage as PendingTargetedAction → DEFENSE_PHASE
       if (targetId !== activeId) {

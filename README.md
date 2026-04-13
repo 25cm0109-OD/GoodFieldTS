@@ -8,7 +8,7 @@
 
 ## 🎮 ゲーム概要
 
-- **プレイヤー数**: 2〜9人（部屋コードで参加）
+- **プレイヤー数**: 2〜9人（合言葉で参加）
 - **勝利条件**: 相手のHPを0にする
 - **ステータス**: HP / MP / PAY（各上限99・下限0）
 - **先攻**: ランダム決定
@@ -56,11 +56,10 @@
 
 ```
 DRAW_PHASE
-  → EXCHANGE_PHASE（両替カードを何枚でも使用可）
-    → ATTACK_PHASE（攻撃/祈る）
-      → DEFENSE_PHASE（防御カードを何枚でも使用可・タイムアウトor確定宣言）
-        → RESOLVE_PHASE（ダメージ計算・HP適用）
-          → END_CHECK（敗北判定・ターン交代）
+  → EXCHANGE_PHASE（攻撃・祈る・両替・売買・回復などの行動を選択）
+    → DEFENSE_PHASE（防御カードを何枚でも使用可・タイムアウトor確定宣言）
+      → RESOLVE_PHASE（ダメージ計算・HP適用）
+        → END_CHECK（敗北判定・ターン交代）
 ```
 
 ---
@@ -115,11 +114,18 @@ src/
 │   └── initialState.ts       # ゲーム初期化（2〜9人対応）
 ├── ui/
 │   ├── cli/
-│   │   └── index.ts          # CLIローカル対戦UI
+│   │   ├── index.ts          # CLIエントリーポイント（入出力ループ）
+│   │   ├── cliActionParser.ts# CLI入力→GameAction変換
+│   │   └── cliView.ts        # CLI表示（状態・手札・ヘルプ）
 │   └── browser/
 │       ├── index.html        # ブラウザGUIエントリーポイント
-│       ├── main.ts           # ゲームループ・レンダリング・AI
+│       ├── main.ts           # ローカル対戦UI
+│       ├── online.ts         # オンライン対戦UI
 │       └── style.css         # ダークテーマスタイル
+│
+├── ui/shared/
+│   ├── cardPredicates.ts     # UI共通のカード種別判定
+│   └── cardUiLabels.ts       # UI共通の日本語ラベル/絵文字
 ├── network/
 │   └── protocol.ts           # オンライン化対応型定義
 └── __tests__/
